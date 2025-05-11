@@ -212,74 +212,86 @@ function processAndDisplayTides(predictions) { // This function should now recei
 // 3. Current Estimate
 async function fetchCurrentData() {
     const today = new Date();
-    // For currents_predictions with datagetter, we usually fetch a range
     const begin_date_str = `${today.getFullYear()}${('0' + (today.getMonth() + 1)).slice(-2)}${('0' + today.getDate()).slice(-2)}`;
-    let endDate = new Date(today); 
-    endDate.setDate(today.getDate() + 1); // Get up to end of next day to be safe for current hour
+    let endDate = new Date(today);
+    endDate.setDate(today.getDate() + 1); // Get up to end of next day
     const end_date_str = `${endDate.getFullYear()}${('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
 
-    // **** MODIFIED URL: Using datagetter and product=currents_predictions ****
-    // Currents predictions usually give speed and direction. Flood/Ebb might be inferred or part of metadata.
-    // The 'bin' parameter is not standard for currents_predictions with datagetter; it's specific to the currents/data endpoint.
-    // The API will return predictions for available bins/depths for that station. We might need to select one.
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.NY_HARBOR_CURRENTS}&product=currents_predictions&time_zone=lst_ldt&units=english&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
-    // Note: interval for currents_predictions can be `MAX_SLACK` or specific minute intervals. Default might be 6-min or hourly. Let's see.
+    // **** MODIFIED URL: Added interval=max_slack for subordinate current station ****
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.NY_HARBOR_CURRENTS}&product=currents_predictions&time_zone=lst_ldt&units=english&format=json&interval=max_slack&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
     
-    console.log("Fetching currents from (datagetter):", url);
+    console.log("Fetching currents from (datagetter, max_slack):", url);
 
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Currents. URL: ${url}`);
         const jsonData = await response.json();
-        console.log("Currents JSON Data (datagetter):", jsonData); 
+        console.log("Currents JSON Data (datagetter, max_slack):", JSON.stringify(jsonData, null, 2));
 
-        // The structure for currents_predictions might be different, e.g., jsonData.current_predictions.నోਟations
-        // Or jsonData.data if it mimics other datagetter products. Let's assume jsonData.data for now.
+        // Data for 'max_slack' will be an array of events (max flood, max ebb, slack)
         if (jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
             const now = new Date();
-            let closestPrediction = null;
-            let minDiff = Infinity;
-
-            jsonData.data.forEach(pred => {
-                // Expected fields from currents_predictions: t, speed, dir, type (like 'ebb', 'flood', 'slack')
-                const predTime = new Date(pred.t); // 't' is standard for time in datagetter
-                if (isNaN(predTime.getTime())) {
-                    console.warn("Invalid date in current prediction:", pred.t);
-                    return; 
-                }
-                const diff = Math.abs(now - predTime);
-                if (diff < minDiff) {
-                    minDiff = diff;
-                    closestPrediction = pred;
-                }
-            });
+            let closestPastEvent = null;
+            let nextFutureEvent = null;
             
-            if (closestPrediction) {
-                const speed = parseFloat(closestPrediction.Speed).toFixed(1); // Or pred.s / pred.speed
-                const direction = parseFloat(closestPrediction.Dir).toFixed(0); // Or pred.d / pred.direction
-                let directionType = closestPrediction.type ? closestPrediction.type.charAt(0).toUpperCase() + closestPrediction.type.slice(1) : "N/A"; // e.g. 'Flood', 'Ebb', 'Slack before flood'
-                
-                // If type isn't directly given, infer from speed (positive might be flood, negative ebb - station dependent)
-                if (directionType === "N/A" && closestPrediction.Speed !== undefined) {
-                     if (parseFloat(speed) > 0.1) directionType = "Flood (est.)"; 
-                     else if (parseFloat(speed) < -0.1) directionType = "Ebb (est.)";
-                     else directionType = "Slack (est.)";
+            // Sort events by time, just in case
+            const sortedEvents = jsonData.data.sort((a,b) => new Date(a.t) - new Date(b.t));
+
+            for (const event of sortedEvents) {
+                const eventTime = new Date(event.t);
+                if (isNaN(eventTime.getTime())) {
+                    console.warn("Invalid date in current event:", event.t);
+                    continue;
                 }
 
+                if (eventTime <= now) {
+                    closestPastEvent = event; // Keep updating to get the latest past event
+                } else if (eventTime > now && !nextFutureEvent) {
+                    nextFutureEvent = event; // First event after now
+                    // break; // Found both, no need to search further if we only need these two
+                }
+            }
+            
+            console.log("CURRENTS: Closest Past Event:", closestPastEvent ? {t: closestPastEvent.t, type: closestPastEvent.type, speed: closestPastEvent.Speed, dir: closestPastEvent.Dir} : "None");
+            console.log("CURRENTS: Next Future Event:", nextFutureEvent ? {t: nextFutureEvent.t, type: nextFutureEvent.type, speed: nextFutureEvent.Speed, dir: nextFutureEvent.Dir} : "None");
 
-                updateTextContent('current-time-prediction', formatTime(closestPrediction.t));
-                updateTextContent('current-speed', `${Math.abs(speed)}`); // Absolute speed
-                updateTextContent('current-direction', `${isNaN(direction) ? '--' : direction}° (${degreesToCardinal(direction)})`);
-                updateTextContent('current-direction-type', directionType);
+            // We'll display information based on the *next* event or the very recent past one if 'now' is very close to it.
+            // The interpretation of "current status" from max/slack data is a bit different.
+            // For now, let's try to display the next upcoming max or slack event.
+            
+            let displayEvent = nextFutureEvent || closestPastEvent; // Prefer future, fallback to most recent past
+
+            if (displayEvent) {
+                const speed = parseFloat(displayEvent.Speed).toFixed(1);
+                const direction = parseFloat(displayEvent.Dir); // Direction is often not present for slack
+                let eventType = displayEvent.type ? displayEvent.type.toLowerCase() : "Unknown"; // e.g., "slack", "maxflood", "maxebb"
+
+                let displayStatus = "Calculating...";
+                if (eventType.includes("slack")) {
+                    displayStatus = `Slack Water at ${formatTime(displayEvent.t)}`;
+                } else if (eventType.includes("flood")) {
+                    displayStatus = `Max Flood (${Math.abs(speed)} kts @ ${isNaN(direction) ? '--' : direction.toFixed(0)}°) at ${formatTime(displayEvent.t)}`;
+                } else if (eventType.includes("ebb")) {
+                    displayStatus = `Max Ebb (${Math.abs(speed)} kts @ ${isNaN(direction) ? '--' : direction.toFixed(0)}°) at ${formatTime(displayEvent.t)}`;
+                } else {
+                    displayStatus = `Event: ${eventType} at ${formatTime(displayEvent.t)} (${Math.abs(speed)} kts)`;
+                }
+
+                // Update the UI. These IDs might need adjustment based on how you want to display max/slack.
+                // For simplicity, I'll update the existing fields, but the meaning changes slightly.
+                updateTextContent('current-time-prediction', `Next Event: ${formatTime(displayEvent.t)}`);
+                updateTextContent('current-speed', `${eventType.includes("slack") ? "0.0" : Math.abs(speed)}`); // Speed is 0 for slack
+                updateTextContent('current-direction', `${isNaN(direction) ? '--' : direction.toFixed(0)}° (${degreesToCardinal(direction)})`);
+                updateTextContent('current-direction-type', eventType.charAt(0).toUpperCase() + eventType.slice(1)); // Capitalize: Slack, Maxflood, Maxebb
             } else {
-                 ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'No current prediction found'));
+                 ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'No current event data'));
             }
         } else {
-            console.warn("No data or unexpected format in currents_predictions response:", jsonData);
+            console.warn("No data or unexpected format in currents_predictions (max_slack) response:", jsonData);
             ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'N/A'));
         }
     } catch (error) {
-        console.error("Error fetching current data (datagetter):", error);
+        console.error("Error fetching current data (datagetter, max_slack):", error);
         ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'Error', true));
     }
 }
