@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NYC Harbor Sailing Conditions</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>NYC Harbor Sailing Conditions</h1>
+        <p>Last Updated: <span id="last-updated">--</span></p>
+        <p class="location-info">Focus Locations: The Battery (Tides & Water Temp), Robbins Reef (Real-time Wind), NY Harbor/Gowanus Flats Area (<span id="current-lat-lon-header"></span> for Currents & Wind Forecast)</p>
+    </header>
+
+    <main>
+        <section id="at-a-glance">
+            <h2>At-a-Glance Summary</h2>
+            <div class="glance-grid">
+                <div class="glance-item"><strong>Tidal Flow:</strong> <span id="summary-tidal-flow">--</span></div>
+                <div class="glance-item"><strong>Next Tide Event:</strong> <span id="summary-next-tide">--</span></div>
+                <div class="glance-item"><strong>Robbins Reef Wind:</strong> <span id="summary-realtime-wind">--</span></div>
+                <div class="glance-item"><strong>Wind Forecast (Current Hour):</strong> <span id="summary-current-wind-forecast">--</span></div>
+            </div>
+        </section>
+
+        <section id="water-temp-section">
+            <h2>Water Temperature</h2>
+            <p>The Battery: <span id="water-temp">--</span> °F</p>
+        </section>
+
+        <section id="tidal-info-section">
+            <h2>Tidal Information (The Battery, NYC)</h2>
+            <p>Current Status: <span id="tide-current-status">--</span></p>
+            <p>Previous Tide: <span id="last-tide">--</span></p>
+            <p>Next Tide: <span id="next-tide">--</span></p>
+            <p>Following Tide: <span id="following-tide">--</span></p>
+        </section>
+
+        <section id="current-estimate-section">
+            <h2>Current Estimate (NY Harbor - Gowanus Flats Area <span id="current-lat-lon-body"></span>)</h2>
+            <p>Time of Prediction: <span id="current-time-prediction">--</span></p>
+            <p>Speed: <span id="current-speed">--</span> knots</p>
+            <p>Direction: <span id="current-direction">--</span> (<span id="current-direction-type">--</span>)</p>
+            <p><small>Note: Positive speed is Flood (typically North/East), negative is Ebb (typically South/West). Direction indicates true bearing.</small></p>
+        </section>
+
+        <section id="wind-conditions-section">
+            <h2>Wind Conditions</h2>
+            <div class="wind-subsection">
+                <h3>Real-time Wind (Robbins Reef Light)</h3>
+                <p>Speed: <span id="robbins-wind-speed">--</span> knots</p>
+                <p>Gusts: <span id="robbins-wind-gusts">--</span> knots</p>
+                <p>Direction: <span id="robbins-wind-direction">--</span>° (<span id="robbins-wind-cardinal">--</span>)</p>
+                <p>Last Reading: <span id="robbins-wind-time">--</span></p>
+            </div>
+            <div class="wind-subsection">
+                <h3>Wind Forecast (NY Harbor/Gowanus Bay Area <span id="forecast-lat-lon-body"></span>)</h3>
+                <div id="wind-forecast-hourly">
+                    <p>Loading forecast...</p>
+                    </div>
+                <p><small>Forecast source: Windy.com (requires API key) or Open-Meteo.</small></p>
+            </div>
+        </section>
+
+        <section id="weather-radar-section">
+            <h2>Weather Radar (Brooklyn/NYC Area)</h2>
+            <iframe id="accuweather-radar"
+                src="https://www.accuweather.com/en/us/brooklyn/11210/weather-radar/334651"
+                width="100%" height="450" frameborder="0" style="border:1px solid #ccc; border-radius: 8px;"
+                allowfullscreen="" aria-hidden="false" tabindex="0">
+            </iframe>
+            <p style="text-align: center; font-size: 0.8em; margin-top: 5px;">
+                Radar courtesy of AccuWeather. Best viewed on larger screens.
+            </p>
+        </section>
+    </main>
+
+    <footer>
+        <p>Data sourced from NOAA, AccuWeather, and Windy.com (or Open-Meteo as configured).</p>
+        <p>This information is for planning and situational awareness. Not for navigation. Always check official sources and use your best judgment before sailing.</p>
+        <p>&copy; <span id="current-year"></span> Your Name/Project Name Here</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
