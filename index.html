@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-UTF-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NYC Harbor Sailing Conditions</title>
     <link rel="stylesheet" href="style.css">
@@ -20,7 +20,7 @@
                 <div class="glance-item"><strong>Tidal Flow:</strong> <span id="summary-tidal-flow">--</span></div>
                 <div class="glance-item"><strong>Next Tide Event:</strong> <span id="summary-next-tide">--</span></div>
                 <div class="glance-item"><strong>Robbins Reef Wind:</strong> <span id="summary-realtime-wind">--</span></div>
-                <div class="glance-item"><strong>Wind Forecast (Current Hour):</strong> <span id="summary-current-wind-forecast">--</span></div>
+                <div class="glance-item"><strong>Wind Forecast (Now):</strong> <span id="summary-current-wind-forecast">--</span></div>
             </div>
         </section>
 
@@ -32,34 +32,36 @@
         <section id="tidal-info-section">
             <h2>Tidal Information (The Battery, NYC)</h2>
             <p>Current Status: <span id="tide-current-status">--</span></p>
-            <p>Previous Tide: <span id="last-tide">--</span></p>
+            <p>Last Tide: <span id="last-tide">--</span></p>
             <p>Next Tide: <span id="next-tide">--</span></p>
             <p>Following Tide: <span id="following-tide">--</span></p>
         </section>
 
         <section id="current-estimate-section">
             <h2>Current Estimate (NY Harbor - Gowanus Flats Area <span id="current-lat-lon-body"></span>)</h2>
-            <p>Time of Prediction: <span id="current-time-prediction">--</span></p>
+            <p>Prediction Time: <span id="current-time-prediction">--</span></p>
             <p>Speed: <span id="current-speed">--</span> knots</p>
             <p>Direction: <span id="current-direction">--</span> (<span id="current-direction-type">--</span>)</p>
-            <p><small>Note: Positive speed is Flood (typically North/East), negative is Ebb (typically South/West). Direction indicates true bearing.</small></p>
+            <p><small>Note: For NOAA current predictions, positive speed is typically Flood, negative is Ebb. Direction indicates true bearing of water movement.</small></p>
         </section>
 
         <section id="wind-conditions-section">
             <h2>Wind Conditions</h2>
             <div class="wind-subsection">
                 <h3>Real-time Wind (Robbins Reef Light)</h3>
-                <p>Speed: <span id="robbins-wind-speed">--</span> knots</p>
-                <p>Gusts: <span id="robbins-wind-gusts">--</span> knots</p>
-                <p>Direction: <span id="robbins-wind-direction">--</span>° (<span id="robbins-wind-cardinal">--</span>)</p>
-                <p>Last Reading: <span id="robbins-wind-time">--</span></p>
+                <p class="wind-details">
+                    Current: <span id="robbins-wind-speed">--</span> knots&nbsp;&nbsp;|&nbsp;&nbsp;
+                    Gusting: <span id="robbins-wind-gusts">--</span> knots&nbsp;&nbsp;|&nbsp;&nbsp;
+                    Direction: <span id="robbins-wind-cardinal">--</span> (<span id="robbins-wind-direction">--</span>°)
+                </p>
+                <p class="wind-update-time">Last Reading: <span id="robbins-wind-time">--</span></p>
             </div>
             <div class="wind-subsection">
                 <h3>Wind Forecast (NY Harbor/Gowanus Bay Area <span id="forecast-lat-lon-body"></span>)</h3>
                 <div id="wind-forecast-hourly">
                     <p>Loading forecast...</p>
                     </div>
-                <p><small>Forecast source: Windy.com (requires API key) or Open-Meteo.</small></p>
+                <p><small>Forecast source: Open-Meteo (or Windy.com if configured).</small></p>
             </div>
         </section>
 
@@ -77,7 +79,7 @@
     </main>
 
     <footer>
-        <p>Data sourced from NOAA, AccuWeather, and Windy.com (or Open-Meteo as configured).</p>
+        <p>Data sourced from NOAA, AccuWeather, and Open-Meteo (or Windy.com as configured).</p>
         <p>This information is for planning and situational awareness. Not for navigation. Always check official sources and use your best judgment before sailing.</p>
         <p>&copy; <span id="current-year"></span> Your Name/Project Name Here</p>
     </footer>
