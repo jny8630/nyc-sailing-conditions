@@ -345,4 +345,24 @@ function processAndDisplayOpenMeteoForecast(hourlyData, source) {
 document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     updateTextContent('last-updated', `${formatDateUserFriendly(now)} ${formatTime(now)}`);
-    updateTextContent('current
+    updateTextContent('current-year', now.getFullYear());
+    const latLonText = `(${TARGET_LAT.toFixed(4)}°N, ${TARGET_LON.toFixed(4)}°W)`; // Corrected W for West
+    updateTextContent('current-lat-lon-header', latLonText);
+    updateTextContent('current-lat-lon-body', latLonText);
+    updateTextContent('forecast-lat-lon-body', latLonText);
+
+    fetchAllData(); // <<<< MAKE SURE THIS LINE IS EXACTLY LIKE THIS
+
+    setInterval(fetchAllData, 15 * 60 * 1000); // <<<< AND THIS LINE IS EXACTLY LIKE THIS
+});
+
+function fetchAllData() { // This is the function definition - it should be fine
+    const now = new Date();
+    updateTextContent('last-updated', `${formatDateUserFriendly(now)} ${formatTime(now)}`);
+
+    fetchWaterTemperature();
+    fetchTidalPredictions();
+    fetchCurrentData();
+    fetchRealtimeWind();
+    fetchWindForecast();
+}
