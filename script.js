@@ -63,7 +63,7 @@ function degreesToCardinal(deg) {
 
 // 1. Water Temperature
 async function fetchWaterTemperature() {
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATIONS.BATTERY_TIDES_WATER_TEMP}&product=water_temperature&datum=MLLW&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=<span class="math-inline">\{NOAA\_STATIONS\.BATTERY\_TIDES\_WATER\_TEMP\}&product\=water\_temperature&datum\=MLLW&units\=english&time\_zone\=lst\_ldt&format\=json&application\=</span>{encodeURIComponent(NOAA_API_APP_NAME)}`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Water Temp`);
@@ -84,9 +84,9 @@ async function fetchWaterTemperature() {
 async function fetchTidalPredictions() {
     let startDate = new Date(); startDate.setDate(startDate.getDate() - 1);
     let endDate = new Date(); endDate.setDate(endDate.getDate() + 2);
-    const begin_date_str = `${startDate.getFullYear()}${('0' + (startDate.getMonth() + 1)).slice(-2)}${('0' + startDate.getDate()).slice(-2)}`;
-    const end_date_str = `${endDate.getFullYear()}${('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.BATTERY_TIDES_WATER_TEMP}&product=predictions&datum=MLLW&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    const begin_date_str = `<span class="math-inline">\{startDate\.getFullYear\(\)\}</span>{('0' + (startDate.getMonth() + 1)).slice(-2)}${('0' + startDate.getDate()).slice(-2)}`;
+    const end_date_str = `<span class="math-inline">\{endDate\.getFullYear\(\)\}</span>{('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=<span class="math-inline">\{begin\_date\_str\}&end\_date\=</span>{end_date_str}&station=<span class="math-inline">\{NOAA\_STATIONS\.BATTERY\_TIDES\_WATER\_TEMP\}&product\=predictions&datum\=MLLW&units\=english&time\_zone\=lst\_ldt&format\=json&application\=</span>{encodeURIComponent(NOAA_API_APP_NAME)}`;
 
     try {
         const response = await fetch(url);
@@ -127,7 +127,10 @@ function processAndDisplayTides(predictions) {
                 followingTide = parsedPredictions[i+1];
             }
         }
-        if (foundNextTide && followingTide) break; // Optimization: if we have next and following, we can stop if previous is also set.
+        if (foundNextTide && followingTide) { // Small optimization
+             // If previousTide is also set, we likely have all we need for typical scenarios
+            if (previousTide) break;
+        }
     }
     
     let currentStatusText = "Calculating...";
@@ -163,17 +166,17 @@ function processAndDisplayTides(predictions) {
 
     updateTextContent('tide-current-status', currentStatusText);
     updateTextContent('summary-tidal-flow', summaryTidalFlowText);
-    updateTextContent('last-tide', previousTide ? `${previousTide.type === "H" ? "High" : "Low"} at ${formatTime(previousTide.time)} (${previousTide.value} ft)` : 'N/A');
-    updateTextContent('next-tide', nextTide ? `${nextTide.type === "H" ? "High" : "Low"} at ${formatTime(nextTide.time)} (${nextTide.value} ft)` : 'N/A');
+    updateTextContent('last-tide', previousTide ? `${previousTide.type === "H" ? "High" : "Low"} at <span class="math-inline">\{formatTime\(previousTide\.time\)\} \(</span>{previousTide.value} ft)` : 'N/A');
+    updateTextContent('next-tide', nextTide ? `${nextTide.type === "H" ? "High" : "Low"} at <span class="math-inline">\{formatTime\(nextTide\.time\)\} \(</span>{nextTide.value} ft)` : 'N/A');
     updateTextContent('summary-next-tide', nextTide ? `${nextTide.type === "H" ? "High" : "Low"} at ${formatTime(nextTide.time)}` : 'N/A');
-    updateTextContent('following-tide', followingTide ? `${followingTide.type === "H" ? "High" : "Low"} at ${formatTime(followingTide.time)} (${followingTide.value} ft)` : 'N/A');
+    updateTextContent('following-tide', followingTide ? `${followingTide.type === "H" ? "High" : "Low"} at <span class="math-inline">\{formatTime\(followingTide\.time\)\} \(</span>{followingTide.value} ft)` : 'N/A');
 }
 
 // 3. Current Estimate
 async function fetchCurrentData() {
     const today = new Date();
-    const dateStr = `${today.getFullYear()}${('0' + (today.getMonth() + 1)).slice(-2)}${('0' + today.getDate()).slice(-2)}`;
-    const url = `https://api.tidesandcurrents.noaa.gov/currents/data/${NOAA_STATIONS.NY_HARBOR_CURRENTS}?bin=${NOAA_STATIONS.CURRENTS_BIN}&date=${dateStr}&units=english&time_zone=LST_LDT&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    const dateStr = `<span class="math-inline">\{today\.getFullYear\(\)\}</span>{('0' + (today.getMonth() + 1)).slice(-2)}${('0' + today.getDate()).slice(-2)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/currents/data/<span class="math-inline">\{NOAA\_STATIONS\.NY\_HARBOR\_CURRENTS\}?bin\=</span>{NOAA_STATIONS.CURRENTS_BIN}&date=<span class="math-inline">\{dateStr\}&units\=english&time\_zone\=LST\_LDT&format\=json&application\=</span>{encodeURIComponent(NOAA_API_APP_NAME)}`;
     console.log("Fetching currents from:", url); // For debugging
 
     try {
@@ -187,12 +190,11 @@ async function fetchCurrentData() {
             let closestPrediction = null;
             let minDiff = Infinity;
 
-            // NOAA currents/data Time is "YYYY-MM-DD HH:MM", so it's already a full date string
             jsonData.data.forEach(pred => {
-                const predTime = new Date(pred.Time); // NOAA "Time" field is usually a full ISO-like string
+                const predTime = new Date(pred.Time); 
                 if (isNaN(predTime.getTime())) {
                     console.warn("Invalid date in current prediction:", pred.Time);
-                    return; // Skip invalid date
+                    return; 
                 }
                 const diff = Math.abs(now - predTime);
                 if (diff < minDiff) {
@@ -204,16 +206,13 @@ async function fetchCurrentData() {
             if (closestPrediction) {
                 const speed = parseFloat(closestPrediction.Speed).toFixed(1);
                 const direction = parseFloat(closestPrediction.Dir).toFixed(0);
-                // Determine Flood/Ebb based on Speed sign; 0 is Slack
-                // Note: The actual definition of Flood/Ebb direction depends on the station's orientation.
-                // For NY Harbor, positive speed is often Flood (incoming), negative is Ebb (outgoing).
                 let directionType = "Slack";
-                if (parseFloat(speed) > 0.1) directionType = "Flood"; // Using a small threshold for slack
+                if (parseFloat(speed) > 0.1) directionType = "Flood"; 
                 else if (parseFloat(speed) < -0.1) directionType = "Ebb";
 
                 updateTextContent('current-time-prediction', formatTime(closestPrediction.Time));
                 updateTextContent('current-speed', `${Math.abs(speed)}`);
-                updateTextContent('current-direction', `${direction}° (${degreesToCardinal(direction)})`);
+                updateTextContent('current-direction', `<span class="math-inline">\{isNaN\(direction\) ? '\-\-' \: direction\}° \(</span>{degreesToCardinal(direction)})`);
                 updateTextContent('current-direction-type', directionType);
             } else {
                  ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'No valid prediction found'));
@@ -230,7 +229,7 @@ async function fetchCurrentData() {
 
 // 4. Real-time Wind (Robbins Reef)
 async function fetchRealtimeWind() {
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATIONS.ROBBINS_REEF_WIND}&product=wind&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=<span class="math-inline">\{NOAA\_STATIONS\.ROBBINS\_REEF\_WIND\}&product\=wind&units\=english&time\_zone\=lst\_ldt&format\=json&application\=</span>{encodeURIComponent(NOAA_API_APP_NAME)}`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Realtime Wind`);
@@ -239,7 +238,7 @@ async function fetchRealtimeWind() {
             const windData = jsonData.data[0];
             const speed = parseFloat(windData.s).toFixed(1);
             const gusts = parseFloat(windData.g).toFixed(1);
-            const direction = parseFloat(windData.d); // Keep as number for degreesToCardinal
+            const direction = parseFloat(windData.d); 
             const time = formatTime(windData.t);
 
             updateTextContent('robbins-wind-speed', speed);
@@ -259,16 +258,12 @@ async function fetchRealtimeWind() {
 
 // 5. Wind Forecast
 async function fetchWindForecast() {
-    // Using Open-Meteo with filtering
     const now = new Date();
-    const startTime = new Date(now.getTime() - 3 * 60 * 60 * 1000); // 3 hours ago
-    const endTime = new Date(now.getTime() + 6 * 60 * 60 * 1000);   // 6 hours from now
-
-    // Format for Open-Meteo 'start_date' and 'end_date' parameters (YYYY-MM-DD)
-    const startDateOpenMeteo = `${startTime.getFullYear()}-${('0' + (startTime.getMonth() + 1)).slice(-2)}-${('0' + startTime.getDate()).slice(-2)}`;
-    const endDateOpenMeteo = `${endTime.getFullYear()}-${('0' + (endTime.getMonth() + 1)).slice(-2)}-${('0' + endTime.getDate()).slice(-2)}`;
-
-    const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${TARGET_LAT}&longitude=${TARGET_LON}&hourly=windspeed_10m,winddirection_10m,windgusts_10m&windspeed_unit=kn&timeformat=iso8601&timezone=America/New_York&start_date=${startDateOpenMeteo}&end_date=${endDateOpenMeteo}`;
+    const startTime = new Date(now.getTime() - 3 * 60 * 60 * 1000); 
+    const endTime = new Date(now.getTime() + 6 * 60 * 60 * 1000);   
+    const startDateOpenMeteo = `<span class="math-inline">\{startTime\.getFullYear\(\)\}\-</span>{('0' + (startTime.getMonth() + 1)).slice(-2)}-${('0' + startTime.getDate()).slice(-2)}`;
+    const endDateOpenMeteo = `<span class="math-inline">\{endTime\.getFullYear\(\)\}\-</span>{('0' + (endTime.getMonth() + 1)).slice(-2)}-${('0' + endTime.getDate()).slice(-2)}`;
+    const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=<span class="math-inline">\{TARGET\_LAT\}&longitude\=</span>{TARGET_LON}&hourly=windspeed_10m,winddirection_10m,windgusts_10m&windspeed_unit=kn&timeformat=iso8601&timezone=America/New_York&start_date=<span class="math-inline">\{startDateOpenMeteo\}&end\_date\=</span>{endDateOpenMeteo}`;
     
     try {
         const response = await fetch(openMeteoUrl);
@@ -290,46 +285,33 @@ async function fetchWindForecast() {
 function processAndDisplayOpenMeteoForecast(hourlyData, source) {
     const forecastContainer = document.getElementById('wind-forecast-hourly');
     forecastContainer.innerHTML = ''; 
-
     const table = document.createElement('table');
     const thead = document.createElement('thead');
     const tbody = document.createElement('tbody');
     const now = new Date();
-
-    // Determine the current day for the header (can span two days with -3 to +6 hours)
     const firstForecastTime = new Date(hourlyData.time[0]);
     const lastForecastTime = new Date(hourlyData.time[hourlyData.time.length -1]);
     let headerDateText = formatDateUserFriendly(firstForecastTime);
     if (formatDateUserFriendly(firstForecastTime) !== formatDateUserFriendly(lastForecastTime)) {
         headerDateText += ` - ${formatDateUserFriendly(lastForecastTime)}`;
     }
-
-
     thead.innerHTML = `<tr><th>Time (${headerDateText})</th><th>Wind (kts)</th><th>Gusts (kts)</th><th>Direction</th></tr>`;
     table.appendChild(thead);
 
     let currentHourForecastSet = false;
-    const timeWindowStart = now.getTime() - 3 * 60 * 60 * 1000;
-    const timeWindowEnd = now.getTime() + 6 * 60 * 60 * 1000;
+    // Open-Meteo API already filters by start_date and end_date, so client-side time window check is less critical here
+    // but good for ensuring we only display relevant data if API gives slightly more.
 
     for (let i = 0; i < hourlyData.time.length; i++) {
         const time = new Date(hourlyData.time[i]);
-
-        // Filter for -3 to +6 hours (Open-Meteo API now does this with start/end_date, but good to double check)
-        // This client-side filter becomes less critical if API correctly filters, but useful for display logic
-        if (time.getTime() < timeWindowStart || time.getTime() > timeWindowEnd) {
-            // continue; // Data should already be filtered by API call, but this is a safeguard
-        }
-
         const speed = hourlyData.windspeed_10m[i] !== null ? parseFloat(hourlyData.windspeed_10m[i]).toFixed(1) : '--';
-        const direction = hourlyData.winddirection_10m[i] !== null ? parseFloat(hourlyData.winddirection_10m[i]).toFixed(0) : '--';
+        const directionVal = hourlyData.winddirection_10m[i] !== null ? parseFloat(hourlyData.winddirection_10m[i]) : NaN;
         const gusts = hourlyData.windgusts_10m[i] !== null ? parseFloat(hourlyData.windgusts_10m[i]).toFixed(1) : '--';
 
         const row = tbody.insertRow();
         if (time < now) {
             row.classList.add('past-hour');
         }
-        // Highlight the row closest to current hour or first future hour
         if (!currentHourForecastSet && time >= now) {
              row.classList.add('current-hour-highlight');
         }
@@ -337,26 +319,25 @@ function processAndDisplayOpenMeteoForecast(hourlyData, source) {
         row.insertCell().textContent = formatTime(time);
         row.insertCell().textContent = speed;
         row.insertCell().textContent = gusts;
-        row.insertCell().textContent = `${isNaN(parseFloat(direction)) ? '--' : direction}° (${degreesToCardinal(parseFloat(direction))})`;
+        row.insertCell().textContent = `<span class="math-inline">\{isNaN\(directionVal\) ? '\-\-' \: directionVal\.toFixed\(0\)\}° \(</span>{degreesToCardinal(directionVal)})`;
 
         if (!currentHourForecastSet && time >= now) {
-            updateTextContent('summary-current-wind-forecast', `${speed} kts ${degreesToCardinal(parseFloat(direction))} (gusts ${gusts} kts)`);
+            updateTextContent('summary-current-wind-forecast', `${speed} kts ${degreesToCardinal(directionVal)} (gusts ${gusts} kts)`);
             currentHourForecastSet = true;
         }
     }
     table.appendChild(tbody);
     forecastContainer.appendChild(table);
-    
     const attribution = document.createElement('p');
-    attribution.innerHTML = `<small>Forecast from ${source}. Showing -3hrs to +6hrs approx.</small>`;
+    attribution.innerHTML = `<small>Forecast from ${source}. Showing approx. -3hrs to +6hrs window.</small>`;
     forecastContainer.appendChild(attribution);
 
     if (!currentHourForecastSet && hourlyData.time.length > 0) { 
-        const closestPastIdx = hourlyData.time.length - 1; // Show last available if all are past
+        const closestPastIdx = hourlyData.time.length - 1; 
         const speed = parseFloat(hourlyData.windspeed_10m[closestPastIdx]).toFixed(1);
-        const direction = parseFloat(hourlyData.winddirection_10m[closestPastIdx]);
+        const directionVal = parseFloat(hourlyData.winddirection_10m[closestPastIdx]);
         const gusts = parseFloat(hourlyData.windgusts_10m[closestPastIdx]).toFixed(1);
-        updateTextContent('summary-current-wind-forecast', `(Recent) ${speed} kts ${degreesToCardinal(direction)} (gusts ${gusts} kts)`);
+        updateTextContent('summary-current-wind-forecast', `(Recent) ${speed} kts ${degreesToCardinal(directionVal)} (gusts ${gusts} kts)`);
     }
 }
 
@@ -364,24 +345,4 @@ function processAndDisplayOpenMeteoForecast(hourlyData, source) {
 document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     updateTextContent('last-updated', `${formatDateUserFriendly(now)} ${formatTime(now)}`);
-    updateTextContent('current-year', now.getFullYear());
-    const latLonText = `(${TARGET_LAT.toFixed(4)}°N, ${TARGET_LON.toFixed(4)}°W)`;
-    updateTextContent('current-lat-lon-header', latLonText);
-    updateTextContent('current-lat-lon-body', latLonText);
-    updateTextContent('forecast-lat-lon-body', latLonText);
-
-    functionfetchAllData(); // Initial fetch
-
-    setInterval(fetchAllData, 15 * 60 * 1000); // Refresh every 15 minutes
-});
-
-function fetchAllData() {
-    const now = new Date();
-    updateTextContent('last-updated', `${formatDateUserFriendly(now)} ${formatTime(now)}`);
-    
-    fetchWaterTemperature();
-    fetchTidalPredictions();
-    fetchCurrentData();
-    fetchRealtimeWind();
-    fetchWindForecast(); 
-}
+    updateTextContent('current
