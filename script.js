@@ -9,12 +9,12 @@ const NOAA_STATIONS = {
     BATTERY_TIDES_WATER_TEMP: '8518750',
     ROBBINS_REEF_WIND: '8530973',
     NY_HARBOR_CURRENTS: 'n05010_6', 
-    CURRENTS_BIN: '6' 
+    CURRENTS_BIN: '6' // This might be less relevant if currents_predictions doesn't use specific bins directly
 };
 
 const NOAA_API_APP_NAME = 'NYCHarborSailingApp/1.0 (yourname@example.com)'; // Replace with your details
 
-// --- UTILITY FUNCTIONS ---
+// --- UTILITY FUNCTIONS --- (Keep these as they were, they are fine)
 function updateTextContent(elementId, text, isError = false) {
     const element = document.getElementById(elementId);
     if (element) {
@@ -33,8 +33,7 @@ function formatTime(dateInput, timeZone = 'America/New_York') {
     if (!dateInput) return '--';
     try {
         const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-        if (isNaN(date.getTime())) { // Check if date is valid
-            // console.error("Invalid date object for time formatting:", dateInput);
+        if (isNaN(date.getTime())) {
             return '--'; 
         }
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: timeZone });
@@ -48,8 +47,7 @@ function formatDateUserFriendly(dateInput, timeZone = 'America/New_York') {
     if (!dateInput) return '--';
     try {
         const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-         if (isNaN(date.getTime())) { // Check if date is valid
-            // console.error("Invalid date object for date formatting:", dateInput);
+         if (isNaN(date.getTime())) {
             return '--';
         }
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: timeZone });
@@ -93,18 +91,22 @@ async function fetchTidalPredictions() {
     let endDate = new Date(); endDate.setDate(endDate.getDate() + 2);
     const begin_date_str = `${startDate.getFullYear()}${('0' + (startDate.getMonth() + 1)).slice(-2)}${('0' + startDate.getDate()).slice(-2)}`;
     const end_date_str = `${endDate.getFullYear()}${('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.BATTERY_TIDES_WATER_TEMP}&product=predictions&datum=MLLW&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    
+    // **** MODIFIED URL: Added interval=hilo ****
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.BATTERY_TIDES_WATER_TEMP}&product=predictions&datum=MLLW&units=english&time_zone=lst_ldt&format=json&interval=hilo&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    
     console.log("Fetching Tidal Predictions from:", url);
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Tides. URL: ${url}`);
         const jsonData = await response.json();
-        console.log("Raw NOAA Tide Predictions JSON:", JSON.stringify(jsonData, null, 2)); 
+        console.log("Raw NOAA Tide Predictions JSON (interval=hilo):", JSON.stringify(jsonData, null, 2)); 
         
+        // The 'predictions' array from interval=hilo should directly contain H/L types
         if (jsonData.predictions && jsonData.predictions.length > 0) {
             processAndDisplayTides(jsonData.predictions);
         } else {
-            console.warn("No tide predictions found in NOAA response or predictions array is empty.");
+            console.warn("No tide predictions found in NOAA response or predictions array is empty (interval=hilo).");
             ['tide-current-status', 'last-tide', 'next-tide', 'following-tide', 'summary-tidal-flow', 'summary-next-tide'].forEach(id => updateTextContent(id, 'N/A'));
         }
     } catch (error) {
@@ -113,19 +115,29 @@ async function fetchTidalPredictions() {
     }
 }
 
-function processAndDisplayTides(predictions) {
+function processAndDisplayTides(predictions) { // This function should now receive H/L data
     const now = new Date();
     let pTide = null; 
     let nTide = null; 
     let fTide = null; 
 
-    const parsedPredictions = predictions.map(p => ({
+    // Ensure predictions have 'type' (H or L)
+    const typedPredictions = predictions.filter(p => p.type); 
+    if (typedPredictions.length === 0 && predictions.length > 0) {
+        console.error("TIDES: Predictions received from NOAA are missing 'type' (H/L). Data:", predictions);
+        // Fallback or error display if types are indeed missing even with interval=hilo
+        updateTextContent('tide-current-status', 'Data format error', true);
+        return;
+    }
+
+
+    const parsedPredictions = typedPredictions.map(p => ({
         time: new Date(p.t),
         type: p.type.toUpperCase(), 
         value: parseFloat(p.v).toFixed(2)
     })).sort((a, b) => a.time - b.time);
     
-    console.log("TIDES: Parsed & Sorted:", JSON.stringify(parsedPredictions.map(p => ({t: p.time.toISOString(), type: p.type, v: p.value})), null, 2));
+    console.log("TIDES: Parsed & Sorted (H/L only):", JSON.stringify(parsedPredictions.map(p => ({t: p.time.toISOString(), type: p.type, v: p.value})), null, 2));
 
     const pastTides = parsedPredictions.filter(p => p.time < now);
     if (pastTides.length > 0) {
@@ -135,36 +147,17 @@ function processAndDisplayTides(predictions) {
     const futureTides = parsedPredictions.filter(p => p.time >= now);
     if (futureTides.length > 0) {
         nTide = futureTides[0]; 
-        for (let i = 1; i < futureTides.length; i++) {
-            if (futureTides[i].type !== nTide.type) {
-                fTide = futureTides[i];
-                break; 
-            }
-        }
-        if (!fTide && futureTides.length > 1) { // If all remaining future are same type, or only nTide left
-            const nTideOriginalIndex = parsedPredictions.findIndex(p => p.time.getTime() === nTide.time.getTime());
-            if (nTideOriginalIndex !== -1 && nTideOriginalIndex + 1 < parsedPredictions.length) {
-               // This fallback ensures fTide is at least the next chronological one if type logic fails to find a different one
-               // but NOAA H/L predictions should alternate.
-               fTide = parsedPredictions[nTideOriginalIndex+1]; 
-            }
+        // For fTide, we just need the next one in sequence if data is clean H/L
+        if (futureTides.length > 1) {
+            fTide = futureTides[1];
         }
     }
     
+    // Fallback for pTide if now is before first prediction
     if (!pTide && nTide) {
         const nTideIndex = parsedPredictions.findIndex(p => p.time.getTime() === nTide.time.getTime());
         if (nTideIndex > 0) {
-            let foundAltPrevious = false;
-            for (let i = nTideIndex - 1; i >= 0; i--) {
-                if (parsedPredictions[i].type !== nTide.type) {
-                    pTide = parsedPredictions[i];
-                    foundAltPrevious = true;
-                    break;
-                }
-            }
-            if (!foundAltPrevious) { 
-                pTide = parsedPredictions[nTideIndex - 1];
-            }
+            pTide = parsedPredictions[nTideIndex - 1];
         }
     }
 
@@ -176,15 +169,12 @@ function processAndDisplayTides(predictions) {
     let summaryTidalFlowText = "Calculating...";
 
     if (pTide && nTide) { 
-        if (pTide.type === 'L' && nTide.type === 'H') {
+        // With H/L data, pTide.type and nTide.type should be different.
+        if (nTide.type === "H") { 
             currentStatusText = "Flooding (Rising)"; summaryTidalFlowText = "Flooding";
-        } else if (pTide.type === 'H' && nTide.type === 'L') {
+        } else if (nTide.type === "L") { 
             currentStatusText = "Ebbing (Falling)"; summaryTidalFlowText = "Ebbing";
-        } else if (pTide.type === nTide.type) {
-             console.warn("TIDES: pTide and nTide are of the same type. This might indicate unusual data or a logic edge case.");
-            currentStatusText = `Near ${pTide.type === 'H' ? 'High' : 'Low'}`; 
-            summaryTidalFlowText = `Near ${pTide.type === 'H' ? 'High' : 'Low'}`;
-        } else { // Should ideally not be reached if types are always H or L
+        } else { 
             currentStatusText = "Between tides"; summaryTidalFlowText = "Turning";
         }
 
@@ -217,30 +207,44 @@ function processAndDisplayTides(predictions) {
     updateTextContent('next-tide', nTide ? `${nTide.type === "H" ? "High" : "Low"} at ${formatTime(nTide.time)} (${nTide.value} ft)` : 'N/A');
     updateTextContent('summary-next-tide', nTide ? `${nTide.type === "H" ? "High" : "Low"} at ${formatTime(nTide.time)}` : 'N/A');
     updateTextContent('following-tide', fTide ? `${fTide.type === "H" ? "High" : "Low"} at ${formatTime(fTide.time)} (${fTide.value} ft)` : 'N/A');
-} // THIS IS THE END OF processAndDisplayTides, line ~195 depending on exact formatting/comments
+} 
 
 // 3. Current Estimate
 async function fetchCurrentData() {
     const today = new Date();
-    const dateStr = `${today.getFullYear()}${('0' + (today.getMonth() + 1)).slice(-2)}${('0' + today.getDate()).slice(-2)}`;
-    const url = `https://api.tidesandcurrents.noaa.gov/currents/data/${NOAA_STATIONS.NY_HARBOR_CURRENTS}?bin=${NOAA_STATIONS.CURRENTS_BIN}&date=${dateStr}&units=english&time_zone=LST_LDT&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
-    console.log("Fetching currents from:", url);
+    // For currents_predictions with datagetter, we usually fetch a range
+    const begin_date_str = `${today.getFullYear()}${('0' + (today.getMonth() + 1)).slice(-2)}${('0' + today.getDate()).slice(-2)}`;
+    let endDate = new Date(today); 
+    endDate.setDate(today.getDate() + 1); // Get up to end of next day to be safe for current hour
+    const end_date_str = `${endDate.getFullYear()}${('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
+
+    // **** MODIFIED URL: Using datagetter and product=currents_predictions ****
+    // Currents predictions usually give speed and direction. Flood/Ebb might be inferred or part of metadata.
+    // The 'bin' parameter is not standard for currents_predictions with datagetter; it's specific to the currents/data endpoint.
+    // The API will return predictions for available bins/depths for that station. We might need to select one.
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.NY_HARBOR_CURRENTS}&product=currents_predictions&time_zone=lst_ldt&units=english&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    // Note: interval for currents_predictions can be `MAX_SLACK` or specific minute intervals. Default might be 6-min or hourly. Let's see.
+    
+    console.log("Fetching currents from (datagetter):", url);
 
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Currents. URL: ${url}`);
         const jsonData = await response.json();
-        console.log("Currents JSON Data:", jsonData); 
+        console.log("Currents JSON Data (datagetter):", jsonData); 
 
+        // The structure for currents_predictions might be different, e.g., jsonData.current_predictions.నోਟations
+        // Or jsonData.data if it mimics other datagetter products. Let's assume jsonData.data for now.
         if (jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
             const now = new Date();
             let closestPrediction = null;
             let minDiff = Infinity;
 
             jsonData.data.forEach(pred => {
-                const predTime = new Date(pred.Time); 
+                // Expected fields from currents_predictions: t, speed, dir, type (like 'ebb', 'flood', 'slack')
+                const predTime = new Date(pred.t); // 't' is standard for time in datagetter
                 if (isNaN(predTime.getTime())) {
-                    console.warn("Invalid date in current prediction:", pred.Time);
+                    console.warn("Invalid date in current prediction:", pred.t);
                     return; 
                 }
                 const diff = Math.abs(now - predTime);
@@ -251,25 +255,31 @@ async function fetchCurrentData() {
             });
             
             if (closestPrediction) {
-                const speed = parseFloat(closestPrediction.Speed).toFixed(1);
-                const direction = parseFloat(closestPrediction.Dir).toFixed(0);
-                let directionType = "Slack";
-                if (parseFloat(speed) > 0.1) directionType = "Flood"; 
-                else if (parseFloat(speed) < -0.1) directionType = "Ebb";
+                const speed = parseFloat(closestPrediction.Speed).toFixed(1); // Or pred.s / pred.speed
+                const direction = parseFloat(closestPrediction.Dir).toFixed(0); // Or pred.d / pred.direction
+                let directionType = closestPrediction.type ? closestPrediction.type.charAt(0).toUpperCase() + closestPrediction.type.slice(1) : "N/A"; // e.g. 'Flood', 'Ebb', 'Slack before flood'
+                
+                // If type isn't directly given, infer from speed (positive might be flood, negative ebb - station dependent)
+                if (directionType === "N/A" && closestPrediction.Speed !== undefined) {
+                     if (parseFloat(speed) > 0.1) directionType = "Flood (est.)"; 
+                     else if (parseFloat(speed) < -0.1) directionType = "Ebb (est.)";
+                     else directionType = "Slack (est.)";
+                }
 
-                updateTextContent('current-time-prediction', formatTime(closestPrediction.Time));
-                updateTextContent('current-speed', `${Math.abs(speed)}`);
+
+                updateTextContent('current-time-prediction', formatTime(closestPrediction.t));
+                updateTextContent('current-speed', `${Math.abs(speed)}`); // Absolute speed
                 updateTextContent('current-direction', `${isNaN(direction) ? '--' : direction}° (${degreesToCardinal(direction)})`);
                 updateTextContent('current-direction-type', directionType);
             } else {
-                 ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'No valid prediction found'));
+                 ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'No current prediction found'));
             }
         } else {
-            console.warn("No data or unexpected format in currents response:", jsonData);
+            console.warn("No data or unexpected format in currents_predictions response:", jsonData);
             ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'N/A'));
         }
     } catch (error) {
-        console.error("Error fetching current data:", error);
+        console.error("Error fetching current data (datagetter):", error);
         ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'Error', true));
     }
 }
