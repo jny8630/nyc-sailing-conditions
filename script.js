@@ -33,7 +33,10 @@ function formatTime(dateInput, timeZone = 'America/New_York') {
     if (!dateInput) return '--';
     try {
         const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-        if (isNaN(date.getTime())) throw new Error("Invalid date object for time formatting: " + dateInput);
+        if (isNaN(date.getTime())) { // Check if date is valid
+            // console.error("Invalid date object for time formatting:", dateInput);
+            return '--'; 
+        }
         return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: timeZone });
     } catch (e) {
         console.error("Error formatting time:", e.message, "Input:", dateInput);
@@ -45,7 +48,10 @@ function formatDateUserFriendly(dateInput, timeZone = 'America/New_York') {
     if (!dateInput) return '--';
     try {
         const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-         if (isNaN(date.getTime())) throw new Error("Invalid date object for date formatting: " + dateInput);
+         if (isNaN(date.getTime())) { // Check if date is valid
+            // console.error("Invalid date object for date formatting:", dateInput);
+            return '--';
+        }
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: timeZone });
     } catch (e) {
         console.error("Error formatting date:", e.message, "Input:", dateInput);
@@ -93,7 +99,6 @@ async function fetchTidalPredictions() {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Tides. URL: ${url}`);
         const jsonData = await response.json();
-        // Log raw data before checking if predictions exist
         console.log("Raw NOAA Tide Predictions JSON:", JSON.stringify(jsonData, null, 2)); 
         
         if (jsonData.predictions && jsonData.predictions.length > 0) {
@@ -116,50 +121,39 @@ function processAndDisplayTides(predictions) {
 
     const parsedPredictions = predictions.map(p => ({
         time: new Date(p.t),
-        type: p.type, 
+        type: p.type.toUpperCase(), 
         value: parseFloat(p.v).toFixed(2)
     })).sort((a, b) => a.time - b.time);
     
-    console.log("Parsed and Sorted Tide Predictions for UI:", 
-        JSON.stringify(parsedPredictions.map(p => ({time: p.time.toISOString(), type: p.type, value: p.value})), null, 2)
-    );
+    console.log("TIDES: Parsed & Sorted:", JSON.stringify(parsedPredictions.map(p => ({t: p.time.toISOString(), type: p.type, v: p.value})), null, 2));
 
-    // Find pTide: the last tide event strictly BEFORE 'now'
     const pastTides = parsedPredictions.filter(p => p.time < now);
     if (pastTides.length > 0) {
         pTide = pastTides[pastTides.length - 1]; 
     }
 
-    // Find nTide: the first tide event AT or AFTER 'now'
     const futureTides = parsedPredictions.filter(p => p.time >= now);
     if (futureTides.length > 0) {
         nTide = futureTides[0]; 
-
-        // Find fTide: the first tide in futureTides *after* nTide that has a DIFFERENT type
         for (let i = 1; i < futureTides.length; i++) {
             if (futureTides[i].type !== nTide.type) {
                 fTide = futureTides[i];
                 break; 
             }
         }
-         // If fTide wasn't found (e.g., all remaining futureTides are same type as nTide, or only nTide is left)
-        // and there's at least one more tide after nTide in the original parsed list, take it directly.
-        // This covers the case where the *very next* tide is the one we want for fTide, regardless of type logic if data is clean.
-        if (!fTide && futureTides.length > 1) {
-             const nTideOriginalIndex = parsedPredictions.findIndex(p => p.time.getTime() === nTide.time.getTime());
-             if (nTideOriginalIndex !== -1 && nTideOriginalIndex + 1 < parsedPredictions.length) {
-                fTide = parsedPredictions[nTideOriginalIndex+1];
-             }
+        if (!fTide && futureTides.length > 1) { // If all remaining future are same type, or only nTide left
+            const nTideOriginalIndex = parsedPredictions.findIndex(p => p.time.getTime() === nTide.time.getTime());
+            if (nTideOriginalIndex !== -1 && nTideOriginalIndex + 1 < parsedPredictions.length) {
+               // This fallback ensures fTide is at least the next chronological one if type logic fails to find a different one
+               // but NOAA H/L predictions should alternate.
+               fTide = parsedPredictions[nTideOriginalIndex+1]; 
+            }
         }
     }
     
-    // Special handling if pTide is not found but nTide is (i.e., 'now' is before the first fetched tide)
-    // Try to find a suitable pTide by looking backwards from nTide in the full parsedPredictions list
     if (!pTide && nTide) {
         const nTideIndex = parsedPredictions.findIndex(p => p.time.getTime() === nTide.time.getTime());
         if (nTideIndex > 0) {
-            // Look for the first tide before nTide that is of a different type
-            // This is a fallback, ideally the initial pastTides filter handles it.
             let foundAltPrevious = false;
             for (let i = nTideIndex - 1; i >= 0; i--) {
                 if (parsedPredictions[i].type !== nTide.type) {
@@ -168,35 +162,38 @@ function processAndDisplayTides(predictions) {
                     break;
                 }
             }
-            if (!foundAltPrevious) { // If all previous are same type (unlikely), just take immediate previous
+            if (!foundAltPrevious) { 
                 pTide = parsedPredictions[nTideIndex - 1];
             }
         }
     }
 
-
-    console.log("Selected Previous Tide:", pTide ? {time: pTide.time.toISOString(), type: pTide.type, value: pTide.value} : "None or out of range");
-    console.log("Selected Next Tide:", nTide ? {time: nTide.time.toISOString(), type: nTide.type, value: nTide.value} : "None or out of range");
-    console.log("Selected Following Tide:", fTide ? {time: fTide.time.toISOString(), type: fTide.type, value: fTide.value} : "None or out of range");
+    console.log("TIDES: Selected Previous:", pTide ? {t: pTide.time.toISOString(), type: pTide.type, v: pTide.value} : "None");
+    console.log("TIDES: Selected Next:", nTide ? {t: nTide.time.toISOString(), type: nTide.type, v: nTide.value} : "None");
+    console.log("TIDES: Selected Following:", fTide ? {t: fTide.time.toISOString(), type: fTide.type, v: fTide.value} : "None");
     
     let currentStatusText = "Calculating...";
     let summaryTidalFlowText = "Calculating...";
 
     if (pTide && nTide) { 
-        if (nTide.type === "H") { 
+        if (pTide.type === 'L' && nTide.type === 'H') {
             currentStatusText = "Flooding (Rising)"; summaryTidalFlowText = "Flooding";
-        } else if (nTide.type === "L") { 
+        } else if (pTide.type === 'H' && nTide.type === 'L') {
             currentStatusText = "Ebbing (Falling)"; summaryTidalFlowText = "Ebbing";
-        } else { 
+        } else if (pTide.type === nTide.type) {
+             console.warn("TIDES: pTide and nTide are of the same type. This might indicate unusual data or a logic edge case.");
+            currentStatusText = `Near ${pTide.type === 'H' ? 'High' : 'Low'}`; 
+            summaryTidalFlowText = `Near ${pTide.type === 'H' ? 'High' : 'Low'}`;
+        } else { // Should ideally not be reached if types are always H or L
             currentStatusText = "Between tides"; summaryTidalFlowText = "Turning";
         }
 
         const minutesToNextTide = (nTide.time - now) / (1000 * 60);
         const minutesFromPreviousTide = (now - pTide.time) / (1000 * 60);
 
-        if ((minutesToNextTide >= 0 && minutesToNextTide <= 30) || (minutesFromPreviousTide >=0 && minutesFromPreviousTide <= 30) ) {
-            let nearTideTypeForSlack = (minutesToNextTide <= 30 && minutesToNextTide >=0 && nTide) ? nTide.type : (pTide ? pTide.type : "");
-            let action = (minutesToNextTide <= 30 && minutesToNextTide >=0) ? "turning towards" : "just after";
+        if ((minutesToNextTide >= 0 && minutesToNextTide <= 45) || (minutesFromPreviousTide >=0 && minutesFromPreviousTide <= 45) ) {
+            let nearTideTypeForSlack = (minutesToNextTide <= 45 && minutesToNextTide >=0 && nTide) ? nTide.type : (pTide ? pTide.type : "");
+            let action = (minutesToNextTide <= 45 && minutesToNextTide >=0) ? "turning towards" : "just after";
             if (nearTideTypeForSlack) {
                 currentStatusText = `Slack, ${action} ${nearTideTypeForSlack === "H" ? "High" : "Low"}`;
                 summaryTidalFlowText = `Slack, ${action[0] === 't' ? '->' : 'after'} ${nearTideTypeForSlack === "H" ? "High" : "Low"}`;
@@ -220,8 +217,7 @@ function processAndDisplayTides(predictions) {
     updateTextContent('next-tide', nTide ? `${nTide.type === "H" ? "High" : "Low"} at ${formatTime(nTide.time)} (${nTide.value} ft)` : 'N/A');
     updateTextContent('summary-next-tide', nTide ? `${nTide.type === "H" ? "High" : "Low"} at ${formatTime(nTide.time)}` : 'N/A');
     updateTextContent('following-tide', fTide ? `${fTide.type === "H" ? "High" : "Low"} at ${formatTime(fTide.time)} (${fTide.value} ft)` : 'N/A');
-}
-
+} // THIS IS THE END OF processAndDisplayTides, line ~195 depending on exact formatting/comments
 
 // 3. Current Estimate
 async function fetchCurrentData() {
