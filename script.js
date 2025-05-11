@@ -63,7 +63,7 @@ function degreesToCardinal(deg) {
 
 // 1. Water Temperature
 async function fetchWaterTemperature() {
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=<span class="math-inline">\{NOAA\_STATIONS\.BATTERY\_TIDES\_WATER\_TEMP\}&product\=water\_temperature&datum\=MLLW&units\=english&time\_zone\=lst\_ldt&format\=json&application\=</span>{encodeURIComponent(NOAA_API_APP_NAME)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATIONS.BATTERY_TIDES_WATER_TEMP}&product=water_temperature&datum=MLLW&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
     console.log("Fetching Water Temp from:", url);
     try {
         const response = await fetch(url);
@@ -85,9 +85,9 @@ async function fetchWaterTemperature() {
 async function fetchTidalPredictions() {
     let startDate = new Date(); startDate.setDate(startDate.getDate() - 1);
     let endDate = new Date(); endDate.setDate(endDate.getDate() + 2);
-    const begin_date_str = `<span class="math-inline">\{startDate\.getFullYear\(\)\}</span>{('0' + (startDate.getMonth() + 1)).slice(-2)}${('0' + startDate.getDate()).slice(-2)}`;
-    const end_date_str = `<span class="math-inline">\{endDate\.getFullYear\(\)\}</span>{('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
-    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=<span class="math-inline">\{begin\_date\_str\}&end\_date\=</span>{end_date_str}&station=<span class="math-inline">\{NOAA\_STATIONS\.BATTERY\_TIDES\_WATER\_TEMP\}&product\=predictions&datum\=MLLW&units\=english&time\_zone\=lst\_ldt&format\=json&application\=</span>{encodeURIComponent(NOAA_API_APP_NAME)}`;
+    const begin_date_str = `${startDate.getFullYear()}${('0' + (startDate.getMonth() + 1)).slice(-2)}${('0' + startDate.getDate()).slice(-2)}`;
+    const end_date_str = `${endDate.getFullYear()}${('0' + (endDate.getMonth() + 1)).slice(-2)}${('0' + endDate.getDate()).slice(-2)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=${begin_date_str}&end_date=${end_date_str}&station=${NOAA_STATIONS.BATTERY_TIDES_WATER_TEMP}&product=predictions&datum=MLLW&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
     console.log("Fetching Tidal Predictions from:", url);
     try {
         const response = await fetch(url);
@@ -169,4 +169,250 @@ function processAndDisplayTides(predictions) {
                 }
             }
             if (!foundAltPrevious) { // If all previous are same type (unlikely), just take immediate previous
-                pTide = parsedPredictions[nTide
+                pTide = parsedPredictions[nTideIndex - 1];
+            }
+        }
+    }
+
+
+    console.log("Selected Previous Tide:", pTide ? {time: pTide.time.toISOString(), type: pTide.type, value: pTide.value} : "None or out of range");
+    console.log("Selected Next Tide:", nTide ? {time: nTide.time.toISOString(), type: nTide.type, value: nTide.value} : "None or out of range");
+    console.log("Selected Following Tide:", fTide ? {time: fTide.time.toISOString(), type: fTide.type, value: fTide.value} : "None or out of range");
+    
+    let currentStatusText = "Calculating...";
+    let summaryTidalFlowText = "Calculating...";
+
+    if (pTide && nTide) { 
+        if (nTide.type === "H") { 
+            currentStatusText = "Flooding (Rising)"; summaryTidalFlowText = "Flooding";
+        } else if (nTide.type === "L") { 
+            currentStatusText = "Ebbing (Falling)"; summaryTidalFlowText = "Ebbing";
+        } else { 
+            currentStatusText = "Between tides"; summaryTidalFlowText = "Turning";
+        }
+
+        const minutesToNextTide = (nTide.time - now) / (1000 * 60);
+        const minutesFromPreviousTide = (now - pTide.time) / (1000 * 60);
+
+        if ((minutesToNextTide >= 0 && minutesToNextTide <= 30) || (minutesFromPreviousTide >=0 && minutesFromPreviousTide <= 30) ) {
+            let nearTideTypeForSlack = (minutesToNextTide <= 30 && minutesToNextTide >=0 && nTide) ? nTide.type : (pTide ? pTide.type : "");
+            let action = (minutesToNextTide <= 30 && minutesToNextTide >=0) ? "turning towards" : "just after";
+            if (nearTideTypeForSlack) {
+                currentStatusText = `Slack, ${action} ${nearTideTypeForSlack === "H" ? "High" : "Low"}`;
+                summaryTidalFlowText = `Slack, ${action[0] === 't' ? '->' : 'after'} ${nearTideTypeForSlack === "H" ? "High" : "Low"}`;
+            } else {
+                currentStatusText = "Slack"; summaryTidalFlowText = "Slack";
+            }
+        }
+    } else if (nTide) { 
+        currentStatusText = `Approaching ${nTide.type === "H" ? "High" : "Low"} Tide`;
+        summaryTidalFlowText = `Approaching ${nTide.type === "H" ? "High" : "Low"}`;
+    } else if (pTide) { 
+        currentStatusText = `Currently after ${pTide.type === "H" ? "High" : "Low"} Tide`;
+        summaryTidalFlowText = `After ${pTide.type === "H" ? "High" : "Low"}`;
+    } else {
+        currentStatusText = "Tide data unavailable"; summaryTidalFlowText = "Tide data unavailable";
+    }
+
+    updateTextContent('tide-current-status', currentStatusText);
+    updateTextContent('summary-tidal-flow', summaryTidalFlowText);
+    updateTextContent('last-tide', pTide ? `${pTide.type === "H" ? "High" : "Low"} at ${formatTime(pTide.time)} (${pTide.value} ft)` : 'N/A');
+    updateTextContent('next-tide', nTide ? `${nTide.type === "H" ? "High" : "Low"} at ${formatTime(nTide.time)} (${nTide.value} ft)` : 'N/A');
+    updateTextContent('summary-next-tide', nTide ? `${nTide.type === "H" ? "High" : "Low"} at ${formatTime(nTide.time)}` : 'N/A');
+    updateTextContent('following-tide', fTide ? `${fTide.type === "H" ? "High" : "Low"} at ${formatTime(fTide.time)} (${fTide.value} ft)` : 'N/A');
+}
+
+
+// 3. Current Estimate
+async function fetchCurrentData() {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}${('0' + (today.getMonth() + 1)).slice(-2)}${('0' + today.getDate()).slice(-2)}`;
+    const url = `https://api.tidesandcurrents.noaa.gov/currents/data/${NOAA_STATIONS.NY_HARBOR_CURRENTS}?bin=${NOAA_STATIONS.CURRENTS_BIN}&date=${dateStr}&units=english&time_zone=LST_LDT&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    console.log("Fetching currents from:", url);
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Currents. URL: ${url}`);
+        const jsonData = await response.json();
+        console.log("Currents JSON Data:", jsonData); 
+
+        if (jsonData.data && Array.isArray(jsonData.data) && jsonData.data.length > 0) {
+            const now = new Date();
+            let closestPrediction = null;
+            let minDiff = Infinity;
+
+            jsonData.data.forEach(pred => {
+                const predTime = new Date(pred.Time); 
+                if (isNaN(predTime.getTime())) {
+                    console.warn("Invalid date in current prediction:", pred.Time);
+                    return; 
+                }
+                const diff = Math.abs(now - predTime);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestPrediction = pred;
+                }
+            });
+            
+            if (closestPrediction) {
+                const speed = parseFloat(closestPrediction.Speed).toFixed(1);
+                const direction = parseFloat(closestPrediction.Dir).toFixed(0);
+                let directionType = "Slack";
+                if (parseFloat(speed) > 0.1) directionType = "Flood"; 
+                else if (parseFloat(speed) < -0.1) directionType = "Ebb";
+
+                updateTextContent('current-time-prediction', formatTime(closestPrediction.Time));
+                updateTextContent('current-speed', `${Math.abs(speed)}`);
+                updateTextContent('current-direction', `${isNaN(direction) ? '--' : direction}° (${degreesToCardinal(direction)})`);
+                updateTextContent('current-direction-type', directionType);
+            } else {
+                 ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'No valid prediction found'));
+            }
+        } else {
+            console.warn("No data or unexpected format in currents response:", jsonData);
+            ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'N/A'));
+        }
+    } catch (error) {
+        console.error("Error fetching current data:", error);
+        ['current-time-prediction', 'current-speed', 'current-direction', 'current-direction-type'].forEach(id => updateTextContent(id, 'Error', true));
+    }
+}
+
+// 4. Real-time Wind (Robbins Reef)
+async function fetchRealtimeWind() {
+    const url = `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?date=latest&station=${NOAA_STATIONS.ROBBINS_REEF_WIND}&product=wind&units=english&time_zone=lst_ldt&format=json&application=${encodeURIComponent(NOAA_API_APP_NAME)}`;
+    console.log("Fetching Realtime Wind from:", url);
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for Realtime Wind. URL: ${url}`);
+        const jsonData = await response.json();
+        if (jsonData.data && jsonData.data.length > 0) {
+            const windData = jsonData.data[0];
+            const speed = parseFloat(windData.s).toFixed(1);
+            const gusts = parseFloat(windData.g).toFixed(1);
+            const direction = parseFloat(windData.d); 
+            const time = formatTime(windData.t);
+
+            updateTextContent('robbins-wind-speed', speed);
+            updateTextContent('robbins-wind-gusts', gusts === '0.0' || gusts === '0' ? 'N/A' : gusts);
+            updateTextContent('robbins-wind-direction', isNaN(direction) ? '--' : direction.toFixed(0));
+            updateTextContent('robbins-wind-cardinal', degreesToCardinal(direction));
+            updateTextContent('robbins-wind-time', time);
+            updateTextContent('summary-realtime-wind', `${speed} kts ${degreesToCardinal(direction)} (gusts ${gusts === '0.0' || gusts === '0' ? 'N/A' : gusts} kts)`);
+        } else {
+            ['robbins-wind-speed', 'robbins-wind-gusts', 'robbins-wind-direction', 'robbins-wind-cardinal', 'robbins-wind-time', 'summary-realtime-wind'].forEach(id => updateTextContent(id, 'N/A'));
+        }
+    } catch (error) {
+        console.error("Error fetching real-time wind:", error);
+         ['robbins-wind-speed', 'robbins-wind-gusts', 'robbins-wind-direction', 'robbins-wind-cardinal', 'robbins-wind-time', 'summary-realtime-wind'].forEach(id => updateTextContent(id, 'Error', true));
+    }
+}
+
+// 5. Wind Forecast
+async function fetchWindForecast() {
+    const now = new Date();
+    const startTime = new Date(now.getTime() - 3 * 60 * 60 * 1000); 
+    const endTime = new Date(now.getTime() + 6 * 60 * 60 * 1000);   
+    const startDateOpenMeteo = `${startTime.getFullYear()}-${('0' + (startTime.getMonth() + 1)).slice(-2)}-${('0' + startTime.getDate()).slice(-2)}`;
+    const endDateOpenMeteo = `${endTime.getFullYear()}-${('0' + (endTime.getMonth() + 1)).slice(-2)}-${('0' + endTime.getDate()).slice(-2)}`;
+    const openMeteoUrl = `https://api.open-meteo.com/v1/forecast?latitude=${TARGET_LAT}&longitude=${TARGET_LON}&hourly=windspeed_10m,winddirection_10m,windgusts_10m&windspeed_unit=kn&timeformat=iso8601&timezone=America/New_York&start_date=${startDateOpenMeteo}&end_date=${endDateOpenMeteo}`;
+    console.log("Fetching Wind Forecast from:", openMeteoUrl);
+    try {
+        const response = await fetch(openMeteoUrl);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status} from Open-Meteo. URL: ${openMeteoUrl}`);
+        const jsonData = await response.json();
+        if (jsonData.hourly && jsonData.hourly.time && jsonData.hourly.time.length > 0) {
+            processAndDisplayOpenMeteoForecast(jsonData.hourly, "Open-Meteo");
+        } else {
+            updateTextContent('wind-forecast-hourly', 'No Open-Meteo forecast data for the selected window.', true);
+            updateTextContent('summary-current-wind-forecast', 'N/A');
+        }
+    } catch (error) {
+        console.error("Error fetching Wind Forecast from Open-Meteo:", error);
+        updateTextContent('wind-forecast-hourly', 'Error loading forecast.', true);
+        updateTextContent('summary-current-wind-forecast', 'Error');
+    }
+}
+
+function processAndDisplayOpenMeteoForecast(hourlyData, source) {
+    const forecastContainer = document.getElementById('wind-forecast-hourly');
+    forecastContainer.innerHTML = ''; 
+    const table = document.createElement('table');
+    const thead = document.createElement('thead');
+    const tbody = document.createElement('tbody');
+    const now = new Date();
+    const firstForecastTime = new Date(hourlyData.time[0]);
+    const lastForecastTime = new Date(hourlyData.time[hourlyData.time.length -1]);
+    let headerDateText = formatDateUserFriendly(firstForecastTime);
+    if (formatDateUserFriendly(firstForecastTime) !== formatDateUserFriendly(lastForecastTime)) {
+        headerDateText += ` - ${formatDateUserFriendly(lastForecastTime)}`;
+    }
+    thead.innerHTML = `<tr><th>Time (${headerDateText})</th><th>Wind (kts)</th><th>Gusts (kts)</th><th>Direction</th></tr>`;
+    table.appendChild(thead);
+
+    let currentHourForecastSet = false;
+
+    for (let i = 0; i < hourlyData.time.length; i++) {
+        const time = new Date(hourlyData.time[i]);
+        const speed = hourlyData.windspeed_10m[i] !== null ? parseFloat(hourlyData.windspeed_10m[i]).toFixed(1) : '--';
+        const directionVal = hourlyData.winddirection_10m[i] !== null ? parseFloat(hourlyData.winddirection_10m[i]) : NaN;
+        const gusts = hourlyData.windgusts_10m[i] !== null ? parseFloat(hourlyData.windgusts_10m[i]).toFixed(1) : '--';
+
+        const row = tbody.insertRow();
+        if (time < now) {
+            row.classList.add('past-hour');
+        }
+        if (!currentHourForecastSet && time >= now) {
+             row.classList.add('current-hour-highlight');
+        }
+
+        row.insertCell().textContent = formatTime(time);
+        row.insertCell().textContent = speed;
+        row.insertCell().textContent = gusts;
+        row.insertCell().textContent = `${isNaN(directionVal) ? '--' : directionVal.toFixed(0)}° (${degreesToCardinal(directionVal)})`;
+
+        if (!currentHourForecastSet && time >= now) {
+            updateTextContent('summary-current-wind-forecast', `${speed} kts ${degreesToCardinal(directionVal)} (gusts ${gusts} kts)`);
+            currentHourForecastSet = true;
+        }
+    }
+    table.appendChild(tbody);
+    forecastContainer.appendChild(table);
+    const attribution = document.createElement('p');
+    attribution.innerHTML = `<small>Forecast from ${source}. Showing approx. -3hrs to +6hrs window.</small>`;
+    forecastContainer.appendChild(attribution);
+
+    if (!currentHourForecastSet && hourlyData.time.length > 0) { 
+        const closestPastIdx = hourlyData.time.length - 1; 
+        const speed = parseFloat(hourlyData.windspeed_10m[closestPastIdx]).toFixed(1);
+        const directionVal = parseFloat(hourlyData.winddirection_10m[closestPastIdx]);
+        const gusts = parseFloat(hourlyData.windgusts_10m[closestPastIdx]).toFixed(1);
+        updateTextContent('summary-current-wind-forecast', `(Recent) ${speed} kts ${degreesToCardinal(directionVal)} (gusts ${gusts} kts)`);
+    }
+}
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    updateTextContent('last-updated', `${formatDateUserFriendly(now)} ${formatTime(now)}`);
+    updateTextContent('current-year', now.getFullYear());
+    const latLonText = `(${TARGET_LAT.toFixed(4)}°N, ${TARGET_LON.toFixed(4)}°W)`;
+    updateTextContent('current-lat-lon-header', latLonText);
+    updateTextContent('current-lat-lon-body', latLonText);
+    updateTextContent('forecast-lat-lon-body', latLonText);
+
+    fetchAllData(); 
+
+    setInterval(fetchAllData, 15 * 60 * 1000); 
+});
+
+function fetchAllData() { 
+    const now = new Date();
+    updateTextContent('last-updated', `${formatDateUserFriendly(now)} ${formatTime(now)}`);
+    
+    fetchWaterTemperature();
+    fetchTidalPredictions();
+    fetchCurrentData();
+    fetchRealtimeWind();
+    fetchWindForecast(); 
+}
